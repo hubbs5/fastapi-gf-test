@@ -45,7 +45,6 @@ layout = html.Div([
     Input('home-url', 'pathname')
 )
 def get_regions(pathname):
-    print(pathname)
     url = base_url + '/regions/'
     response = requests.get(url)
     if response.status_code == 200:
@@ -80,8 +79,8 @@ def get_years(pathname):
 @app.callback(
     Output('greenfield-data', 'children'),
     [Input('get-data', 'n_clicks')],
-    [State('region-dropdown', 'value'),
-     State('year-dropdown', 'value')]
+    [State('region-response', 'children'),
+     State('year-response', 'children')]
 )
 def get_data(n_clicks, region, year):
     url = base_url + '/data/'
