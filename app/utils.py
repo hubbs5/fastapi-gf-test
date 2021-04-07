@@ -83,5 +83,36 @@ def convert_results_to_json(soln_dict):
                 out[iter_key][k2] = v2
     return json.dumps(out)
 
+def _check_max_input(X):
+    '''Takes string input from app and changes it based on expected output'''
+    try:
+        if X is None:
+            return None
+        elif X.upper() == 'NONE':
+            return np.inf
+        elif int(X) <= 0:
+            return np.inf
+        elif int(X) > 0:
+            return int(X)
+        else:
+            # To raise error in app
+            return None
+    except ValueError:
+        return None
 
-
+def _check_min_input(X):
+    '''Takes string input from app and changes it based on expected output'''
+    try:
+        if X is None:
+            return None
+        elif X.upper() == 'NONE':
+            return 0
+        elif int(X) <= 0:
+            return 0
+        elif int(X) > 0:
+            return int(X)
+        else:
+            # To raise error in app
+            return None
+    except ValueError:
+        return None

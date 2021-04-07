@@ -3,11 +3,18 @@ import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
+import dash_table as dt
+import requests
+import pandas as pd
+import json
 
 # from pages import home, optimize
 from app import app
+import utils
 
 # PAGES = ['/home', '/optimization']
+
+base_url = "http://127.0.0.1:8000"
 
 # the style arguments for the sidebar. We use position:fixed and a fixed width
 SIDEBAR_STYLE = {
@@ -35,8 +42,9 @@ sidebar = html.Div([
         # "", className="lead"
     # ),
     dbc.Nav([
-        dbc.NavItem(dbc.NavLink("Home", href="/home")), 
-        dbc.NavItem(dbc.NavLink("Optimization", href="/optimization"))
+        dbc.NavItem(dbc.NavLink("Digital Twin Home", href="/home")), 
+        dbc.NavItem(dbc.NavLink("Greenfield Algo", 
+            href="https://emrahcimren.github.io/data%20science/Greenfield-Analysis-with-Weighted-Clustering/"))
         ],
         vertical=True,
         pills=True,
@@ -46,46 +54,101 @@ sidebar = html.Div([
 )
 
 layout = html.Div([
-    sidebar,
+    # sidebar,
     dcc.Location(id='base-url', refresh=True),
     dbc.Row([
-        html.H1('Select Region and Year')
-    ]),
-    dbc.Row([
         dbc.Col([
-            html.H4('Region'),
-            html.Div(id='region-response')
+            sidebar,
         ],
             width=3
         ),
         dbc.Col([
-            html.H4('Year'),
-            html.Div(id='year-response')
-        ],
-            width=3
-        ),
-    ]),
-    html.Br(),
-    dbc.Row([
-        html.Button('Get Data', id='get-data')
-    ]),
-    html.Br(),
-    dbc.Row([
-        html.Div(id='greenfield-data')
-    ]),
+            dbc.Row([
+                html.H1('Select Region and Year')
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.H4('Region'),
+                    html.Div(id='region-response')
+                ],
+                    width=3
+                ),
+                dbc.Col([
+                    html.H4('Year'),
+                    html.Div(id='year-response')
+                ],
+                    width=3
+                ),
+            ]),
+            html.Br(),
+            dbc.Row([
+                html.Button('Get Data', id='get-data')
+            ]),
+            html.Br(),
+            dbc.Row([
+                html.Div(id='greenfield-data')
+            ]),
 
-    # Optimization
-    dbc.Row([
-            html.H1('Optimization')]
-        ),
-        dbc.Row([
-            html.Div(id='optimization-response')
-        ])
+            # Optimization
+            html.Br(),
+            dbc.Row([
+                    html.H1('Optimization')]
+                ),
+            dbc.Row([
+                dbc.Col([
+                    html.H5('Select Number of Distribution Centers'),
+                    dcc.Slider(id='dc-loc-number',
+                        min=1, max=20, step=1, value=5,
+                        marks={i:str(i) for i in range(1, 21)}),
+                ],
+                ),
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    html.H5('Max Distribution Center Capacity'),
+                    dcc.Input(id='capacity-max-input',
+                        type='text',
+                        placeholder='Capacity in annual KG'),
+                    html.Br(),
+                    html.H5('Min Distribution Center Capacity'),
+                    dcc.Input(id='capacity-min-input',
+                        type='text',
+                        placeholder='Capacity in annual KG'),
+                    html.Br(),
+                ]),
+                dbc.Col([
+                    html.H5('Max Customer Distance'),
+                    # html.Caption('Enter 0 or None to remove limits.'),
+                    dcc.Input(id='distance-max-input',
+                        type='text',
+                        placeholder='Shipping distance in KM'),
+                    html.Br(),
+                    html.H5('Number of Iterations'),
+                    dcc.Input(id='iterations-input',
+                        type='number',
+                        value=5,
+                        min=1,
+                        max=20,
+                        step=1)
+                ]),
+            ]),
+            html.Br(),
+            dbc.Row([
+                html.Button('Run Optimization Algorithm', id='opt-button')
+            ]),
+            html.Br(),
+            dbc.Row([
+                html.Div(id='optimization-response')
+            ])
+        ],
+            width=6
+        )
+    ])
 ])
 
 @app.callback(
     Output('region-response', 'children'),
-    Input('home-url', 'pathname')
+    Input('base-url', 'pathname')
 )
 def get_regions(pathname):
     url = base_url + '/regions/'
@@ -103,7 +166,7 @@ def get_regions(pathname):
 
 @app.callback(
     Output('year-response', 'children'),
-    Input('home-url', 'pathname')
+    Input('base-url', 'pathname')
 )
 def get_years(pathname):
     url = base_url + '/years/'
@@ -125,51 +188,100 @@ def get_years(pathname):
     [State('region-response', 'children'),
      State('year-response', 'children')]
 )
-def get_data(n_clicks, region, year):
+def get_data(n_clicks, region_dict, year_dict):
+    if year_dict is None or region_dict is None:
+        return html.Div()
+    # Using children instead of value to avoid non existent attribute error
+    region = region_dict['props']['value']
+    year = year_dict['props']['value']
     url = base_url + '/data/'
     params = {'region': region, 'year': year}
     response = requests.get(url, params=params)
     if response.status_code == 200:
-        out = json.loads(response.json())
-        data = pd.DataFrame(out)
+        out = response.json()
+        data = pd.DataFrame(json.loads(out))
+        data.reset_index(inplace=True)
+        cols = [i if 'DEMAND' not in i.upper() else i.split('_')[0]
+            for i in data.columns]
+        cols[0] = 'City'
+        data.columns = cols
+        out = dt.DataTable(
+            id='api-data-table',
+            columns=[{'name': i, 'id': i} for i in cols],
+            data=data.to_dict('records'),
+            sort_action='native',
+            row_selectable='multi'
+        )
     else:
         out = html.H1('Error: Invalid API call to "data".')
 
     return out
 
-
 @app.callback(
     Output('optimization-response', 'children'),
-    Input('opt-url', 'pathname')
+    Input('opt-button', 'n_clicks'),
+    [State('greenfield-data', 'children'),
+     State('dc-loc-number', 'value'),
+     State('distance-max-input', 'value'),
+     State('capacity-max-input', 'value'),
+     State('capacity-min-input', 'value'),
+     State('iterations-input', 'value')]
 )
-def get_regions(pathname):
-    print(pathname)
-    url = base_url + '/regions/'
-    response = requests.get(url)
-    if response.status_code == 200:
-        regions = [i['region'] for i in response.json()]
-        out = dcc.Dropdown(
-            id='-dropdown',
-            options=[{'label': i, 'value': i} for i in regions]
-        )
-    else:
-        out = html.H1('Error: Invalid API Call')
+def get_regions(n_clicks, data, n_locs, dist_max, cap_max, cap_min, iters):
+    out = html.Div()
+
+    if n_clicks is not None:
+        url = base_url + '/greenfield/'
+
+        # Check for None or odd inputs
+        dist_max = utils._check_max_input(dist_max)
+        cap_max = utils._check_max_input(cap_max)
+        cap_min = utils._check_min_input(cap_min)
+
+        # Add errors in case of missing data or improper input
+        msg = ''
+        if dist_max is None:
+            msg += 'Check your maximum distance input, should be a number or' 
+            msg += ' "None" to remove constraint.\n'
+        if cap_max is None:
+            msg += 'Check your maximum capacity input, should be a number or' 
+            msg += ' "None" to remove constraint.\n'
+        if cap_min is None:
+            msg += 'Check your minimum capacity input, should be a number or' 
+            msg += ' "None" to remove constraint.\n'
+
+        if data is None:
+            msg += 'Get data before running optimization.'
+        else:
+            # Parse data table
+            try:
+                cust_data = data['props']['derived_viewport_data']
+            except KeyError:
+                return html.P('Check data inputs.')
+            demand = [i['Demand'] for i in cust_data]
+            lat = [i['Latitude'] for i in cust_data]
+            lon = [i['Longitude'] for i in cust_data]
+
+        if len(msg) > 0:
+            return html.P('Error:\n' + msg)
+
+        print(iters, type(iters))
+
+        params = {
+            'n_locs': int(n_locs),
+            'iters': int(iters),
+            'dist_max': dist_max,
+            'cap_max': cap_max,
+            'cap_min': cap_min,
+            'demand': demand,
+            'custLat': lat,
+            'custLon': lon
+        }
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            out = html.H1('Optimization Successful!')
+        else:
+            out = html.H1('Error: Invalid API Call')
 
     return out
-# @app.callback(
-#     [Output('home-display', 'style'),
-#      Output('opt-display', 'style')],
-#     Input('base-url', 'pathname')
-# )
-# def router(pathname):
-#     output = []
-#     for p in PAGES:
-#         if pathname in p and pathname != '/':
-#             output.append({'display': 'block'})
-#         elif pathname == '/' and '/home' in pathname:
-#             output.append({'display': 'block'})
-#         else:
-#             output.append({'display': 'none'})
-
-#     return output
 
