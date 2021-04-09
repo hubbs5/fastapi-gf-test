@@ -5,6 +5,8 @@ import warnings
 from pyomo.environ import Var, Param
 import numpy as np
 import pandas as pd
+import folium
+from folium import plugins
 
 def calc_distance(X, Y):
     return np.sqrt(np.power(X[0]-Y[0], 2) + np.power(X[1]-Y[1], 2))
@@ -116,3 +118,32 @@ def _check_min_input(X):
             return None
     except ValueError:
         return None
+
+def plot_customer_assignment(opt_results_iteration):
+    '''Plots customer assignment from optimization model output.'''
+    colors = ['red', 'blue', 'darkred', 'lightred',
+              'orange', 'beige', 'green', 'darkgreen',
+              'lightgreen', 'darkblue', 'lightblue', 'purple',
+              'darkpurple', 'pink', 'cadetblue', 'lightgray',
+              'gray', 'black']
+    # Plot customer locations
+    lat_cust = [i for i in opt_results_iteration['model']['parameters']['lat_cust'].values()]
+    lon_cust = [i for i in opt_results_iteration['model']['parameters']['lon_cust'].values()]
+    CUST = len(lat_cust)
+    dc_locs = np.vstack(opt_results_iteration['dc_locs'])
+    DC = len(dc_locs)
+    assignment = opt_results_iteration['model']['variables']['dc_assignment']
+    map_center = [np.mean(lat_cust), np.mean(lon_cust)]
+    
+    m = folium.Map(location=map_center, zoom_start=4, width=800)
+    _ = [folium.Marker(location=(lat_cust[j], lon_cust[j]), 
+            icon=folium.Icon(color=colors[i])).add_to(m)
+            for i in range(DC) 
+             for j in range(CUST) if assignment[str(i)][str(j)] > 0]
+    
+    _ = [folium.Marker(location=(dc[0], dc[1]), 
+            icon=folium.Icon(color=colors[i], icon='screenshot'),
+            tooltip=f'Distribution Center {i}').add_to(m)
+             for i, dc in enumerate(dc_locs)]
+    
+    return m

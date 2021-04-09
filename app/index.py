@@ -6,7 +6,10 @@ import dash_bootstrap_components as dbc
 import dash_table as dt
 import requests
 import pandas as pd
+import numpy as np
 import json
+import folium
+from folium import plugins
 
 # from pages import home, optimize
 from app import app
@@ -141,8 +144,8 @@ layout = html.Div([
                 html.Div(id='optimization-response')
             ])
         ],
-            width=6
-        )
+            width=8
+        ),
     ])
 ])
 
@@ -227,7 +230,7 @@ def get_data(n_clicks, region_dict, year_dict):
      State('capacity-min-input', 'value'),
      State('iterations-input', 'value')]
 )
-def get_regions(n_clicks, data, n_locs, dist_max, cap_max, cap_min, iters):
+def run_optimization(n_clicks, data, n_locs, dist_max, cap_max, cap_min, iters):
     out = html.Div()
 
     if n_clicks is not None:
@@ -265,8 +268,6 @@ def get_regions(n_clicks, data, n_locs, dist_max, cap_max, cap_min, iters):
         if len(msg) > 0:
             return html.P('Error:\n' + msg)
 
-        print(iters, type(iters))
-
         params = {
             'n_locs': int(n_locs),
             'iters': int(iters),
@@ -279,7 +280,15 @@ def get_regions(n_clicks, data, n_locs, dist_max, cap_max, cap_min, iters):
         }
         response = requests.get(url, params=params)
         if response.status_code == 200:
-            out = html.H1('Optimization Successful!')
+            msg = html.H1('Optimization Successful!')
+            res = json.loads(response.json())
+            # Plot best results
+            best_iter = np.argmin([i['obj'] for i in res.values()])
+            m = utils.plot_customer_assignment(res[f'iter_{best_iter}'])
+            m.save("folium_map.html")
+            out = html.Div([msg, 
+                html.Iframe(srcDoc=open("folium_map.html", "r").read(),
+                    height="100%", width="100%")])
         else:
             out = html.H1('Error: Invalid API Call')
 

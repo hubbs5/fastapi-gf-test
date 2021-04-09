@@ -54,7 +54,7 @@ async def run_greenfield(
         dist_max = np.inf
     if cap_max is None:
         cap_max = np.inf
-    model = BaseGreenFieldModel(n=n_locs, iters=iters, 
+    model = BaseGreenFieldModel(n=n_locs, iters=iters,
         dist_max=dist_max, cap_min=cap_min, cap_max=cap_max)
     demand = np.array(demand).astype(float)
     custLat = np.array(custLat).astype(float)
